@@ -470,6 +470,27 @@ class WeWorkIP(_PluginBase):
                                 ]
                             }
                         ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VAlert',
+                                        'props': {
+                                            'type': 'info',
+                                            'variant': 'tonal',
+                                            'text': '微信通知代理地址记得改回https://qyapi.weixin.qq.com/并重启MP'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
                     }
                 ]
             }
