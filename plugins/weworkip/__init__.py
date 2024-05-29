@@ -464,7 +464,7 @@ class WeWorkIP(_PluginBase):
                                         'props': {
                                             'type': 'info',
                                             'variant': 'tonal',
-                                            'text': '微信管理cookie后台固定半小时刷新一次,和这里设置的检测周期无关。'
+                                            'text': 'cookie需填入HeaderString的格式,后台固定半小时验证一次cookie,和这里设置的检测周期无关。'
                                         }
                                     }
                                 ]
@@ -485,7 +485,7 @@ class WeWorkIP(_PluginBase):
                                         'props': {
                                             'type': 'info',
                                             'variant': 'tonal',
-                                            'text': 'cookie获取插件:https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm'
+                                            'text': 'cookie获取插件：https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm'
                                         }
                                     }
                                 ]
