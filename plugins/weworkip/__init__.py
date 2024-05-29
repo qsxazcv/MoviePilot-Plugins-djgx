@@ -23,7 +23,7 @@ class WeWorkIP(_PluginBase):
     # 插件图标
     plugin_icon = ""
     # 插件版本
-    plugin_version = "1.0"
+    plugin_version = "1.0.0"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
