@@ -23,7 +23,7 @@ class WeWorkIP(_PluginBase):
     # 插件图标
     plugin_icon = ""
     # 插件版本
-    plugin_version = "1.0.1"
+    plugin_version = "1.0.2"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -152,7 +152,7 @@ class WeWorkIP(_PluginBase):
             return False
             
 
-    def get_ip_from_url(url):
+    def get_ip_from_url(self,url):
         try:
             # 发送 GET 请求
             response = requests.get(url)
@@ -160,7 +160,7 @@ class WeWorkIP(_PluginBase):
             # 检查响应状态码是否为 200
             if response.status_code == 200:
                 # 解析响应 JSON 数据并获取 IP 地址
-                ip_address = re.search(ip_pattern, response.text)
+                ip_address = re.search(self._ip_pattern, response.text)
                 if ip_address:
                     return ip_address.group()
                 else:
