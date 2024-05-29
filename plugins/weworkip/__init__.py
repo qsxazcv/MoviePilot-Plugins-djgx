@@ -153,23 +153,23 @@ class WeWorkIP(_PluginBase):
             
 
     def get_ip_from_url(url):
-    try:
-        # 发送 GET 请求
-        response = requests.get(url)
+        try:
+            # 发送 GET 请求
+            response = requests.get(url)
         
-        # 检查响应状态码是否为 200
-        if response.status_code == 200:
-            # 解析响应 JSON 数据并获取 IP 地址
-            ip_address = re.search(ip_pattern, response.text)
-            if ip_address:
-                return ip_address.group()
+            # 检查响应状态码是否为 200
+            if response.status_code == 200:
+                # 解析响应 JSON 数据并获取 IP 地址
+                ip_address = re.search(ip_pattern, response.text)
+                if ip_address:
+                    return ip_address.group()
+                else:
+                    return "获取IP失败"
             else:
                 return "获取IP失败"
-        else:
+        except Exception as e:
+            print (f"获取IP失败,Error: {e}")
             return "获取IP失败"
-    except Exception as e:
-        print (f"获取IP失败,Error: {e}")
-        return "获取IP失败"
             
     def ChangeIP(self):
         logger.info("开始请求企业微信管理更改可信IP")
