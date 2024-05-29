@@ -1,6 +1,6 @@
 {
     "WeWorkIP": {
-        "name": "微信应用自动配置可信IP",
+        "name": "企微自动配置IP",
         "description": "定时获取最新动态公网IP，配置到企业微信应用的可信IP列表里。",
         "labels": "消息通知",
         "version": "1.0.0",
