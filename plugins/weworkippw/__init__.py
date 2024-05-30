@@ -18,11 +18,11 @@ class WeWorkIPPW(_PluginBase):
     # 插件名称
     plugin_name = "企微自动配置IPpw版"
     # 插件描述
-    plugin_desc = "定时获取最新动态公网IP，配置到企业微信应用的可信IP列表里。"
+    plugin_desc = "!!docker用户用这个版本!!定时获取最新动态公网IP，配置到企业微信应用的可信IP列表里。"
     # 插件图标
     plugin_icon = ""
     # 插件版本
-    plugin_version = "1.0.0"
+    plugin_version = "1.0.1"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
