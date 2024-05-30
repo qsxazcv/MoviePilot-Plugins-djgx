@@ -222,7 +222,7 @@ class WeWorkIPPW(_PluginBase):
                 if self._overwrite:
                     input_area.fill(self._current_ip_address)
                 else:
-                    input_area.fill(f'{existing_ip};{self.current_ip_address}')
+                    input_area.fill(f'{existing_ip};{self._current_ip_address}')
                 confirm.click()
                 time.sleep(1)
                 logger.info("更改IP地址成功")
