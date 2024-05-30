@@ -24,7 +24,7 @@ class WeWorkIP(_PluginBase):
     # 插件图标
     plugin_icon = ""
     # 插件版本
-    plugin_version = "1.0.3"
+    plugin_version = "1.0.4"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -53,8 +53,10 @@ class WeWorkIP(_PluginBase):
     _use_cookiecloud = True
     #cookie有效检测
     _cookie_valid = False
-    #检测间隔时间,默认30分钟,太久会导致cookie失效
-    _refresh_cron = '0 */2 * * *'
+    #IP更改成功状态,防止检测IP改动但cookie失效的时候_current_ip_address已经更新成新IP导致后面刷新cookie也没有更改企微IP
+    _ip_changed = False
+    #检测间隔时间,默认10分钟,太久会导致cookie失效
+    _refresh_cron = '*/10 * * * *'
     _cron = None
     _enabled = False
     _onlyonce = False
@@ -70,6 +72,7 @@ class WeWorkIP(_PluginBase):
         self._overwrite = True
         self._use_cookiecloud = True
         self._cookie_valid = False
+        self._ip_changed = False
 
         if config:
             self._enabled = config.get("enabled")
@@ -80,6 +83,7 @@ class WeWorkIP(_PluginBase):
             self._overwrite = config.get("overwrite")
             self._current_ip_address = config.get("current_ip_address")
             self._use_cookiecloud = config.get("use_cookiecloud")
+            self._ip_changed = config.get("ip_changed")
             
         # 停止现有任务
         self.stop_service()
@@ -144,8 +148,10 @@ class WeWorkIP(_PluginBase):
         if not self._cookie_valid:
             self.refresh_cookie()
             if not self._cookie_valid:
-                logger.error("请求企微失败,缓存可能过期,跳过IP检测")
+                logger.error("请求企微失败,cookie可能过期,跳过IP检测")
                 return False
+        if not self._ip_changed:#上次IP变更没有改动到企微 再次请求该IP
+            return True
         for url in self._ip_urls:
             ip_address = self.get_ip_from_url(url)
             if ip_address != "获取IP失败":
@@ -159,6 +165,7 @@ class WeWorkIP(_PluginBase):
         if ip_address != self._current_ip_address:
             logger.info("检测到IP变化")
             self._current_ip_address = ip_address
+            self._ip_changed = False
             return True
         else:
             #logger.info("公网IP未变化")
@@ -186,13 +193,13 @@ class WeWorkIP(_PluginBase):
     def ChangeIP(self):
         logger.info("开始请求企业微信管理更改可信IP")
         # 解析 Cookie 字符串为字典
-        cookies = self._cookie_header.split(';')
         options = webdriver.EdgeOptions()
         options.add_argument('--headless')  # 无头模式
         driver = webdriver.Edge(options=options)
         driver.get(self._wechatUrl)
         time.sleep(1)  
         driver.delete_all_cookies()
+        cookies = self.get_cookie()
         for cookie in cookies:
             name, value = cookie.split('=')
             driver.add_cookie({"name": name, "value": value})
@@ -200,10 +207,12 @@ class WeWorkIP(_PluginBase):
         time.sleep(1)
         try:
             driver.find_element(By.CLASS_NAME,'login_stage_title_text')
-            logger.error("缓存失效,请重新获取")
+            logger.error("cookie失效,请重新获取")
+            self._cookie_valid = False
             return
         except Exception as e:
-            e
+            logger.info("加载企微管理界面成功")
+            self._cookie_valid = True
         #开始更改ip地址
         try:
             logger.info("正在更改IP地址")
@@ -218,28 +227,13 @@ class WeWorkIP(_PluginBase):
             inputArea.send_keys(f';{self._current_ip_address}')
             confirm.click()
             time.sleep(1)
-            logger.info("更改IP地址成功")       
+            logger.info("更改IP地址成功")      
+            self._ip_changed = True 
         except Exception as e:
-            logger.error(f"更改IP地址失败: {e}")       
+            logger.error(f"更改可信IP失败: {e}")       
         driver.quit()    
     
     def refresh_cookie(self):
-        cookies = ''
-        if self._use_cookiecloud:
-            logger.info("尝试从CookieCloud同步企微cookie ...")
-            cookies, msg = self._cookiecloud.download()
-            if not cookies:
-                logger.error(f"CookieCloud获取cookie失败,将使用手动配置缓存,失败原因：{msg}")
-                cookies = self._cookie_header.split(';')
-            else:
-                for domain, cookie in cookies.items():
-                    if domain == ".work.weixin.qq.com":
-                        cookies = cookie.split(';')
-                        break
-                if cookies == '':
-                    cookies = self._cookie_header.split(';')
-        else:                
-            cookies = self._cookie_header.split(';')
         try:    
             options = webdriver.EdgeOptions()
             options.add_argument('--headless')  # 无头模式
@@ -247,22 +241,47 @@ class WeWorkIP(_PluginBase):
             driver.get(self._wechatUrl)
             time.sleep(1)  
             driver.delete_all_cookies()
+            cookies = self.get_cookie()
             for cookie in cookies:
                 name, value = cookie.split('=')
                 driver.add_cookie({"name": name, "value": value})
             driver.get(self._wechatUrl)
             try:
                 driver.find_element(By.CLASS_NAME,'login_stage_title_text')
-                logger.error("缓存失效,请重新获取")
+                logger.error("cookie失效,请重新获取")
+                self._cookie_valid = False
                 return
             except Exception as e:
-                logger.info("缓存有效校验成功")
+                logger.info("cookie有效校验成功")
                 self._cookie_valid = True
             driver.quit()
         except Exception as e:
-                logger.error(f"缓存校验失败:{e}") 
+                logger.error(f"cookie校验失败:{e}") 
                 self._cookie_valid = False   
     
+    def get_cookie(self):
+        cookie_header = ''
+        try:
+            if self._use_cookiecloud:
+                logger.info("尝试从CookieCloud同步企微cookie ...")
+                cookies, msg = self._cookiecloud.download()
+                if not cookies:
+                    logger.error(f"CookieCloud获取cookie失败,将使用手动配置cookie,失败原因：{msg}")
+                    cookie_header = self._cookie_header.split(';')
+                else:
+                    for domain, cookie in cookies.items():
+                        if domain == ".work.weixin.qq.com":
+                            cookie_header = cookie.split(';')
+                            break
+                    if cookie_header == '':
+                        cookie_header = self._cookie_header.split(';')
+            else:                
+                cookie_header = self._cookie_header.split(';')
+            return cookie_header
+        except Exception as e:
+                logger.error(f"获取cookie失败:{e}") 
+                return cookie_header 
+              
     def __update_config(self):
         """
         更新配置
@@ -276,6 +295,7 @@ class WeWorkIP(_PluginBase):
             "overwrite": self._overwrite,
             "current_ip_address": self._current_ip_address,
             "use_cookiecloud": self._use_cookiecloud,
+            "ip_changed": self._ip_changed
         })
 
     def get_state(self) -> bool:
@@ -391,7 +411,7 @@ class WeWorkIP(_PluginBase):
                                         'component': 'VSwitch',
                                         'props': {
                                             'model': 'use_cookiecloud',
-                                            'label': '使用CookieCloud获取缓存',
+                                            'label': '使用CookieCloud获取cookie',
                                         }
                                     }
                                 ]
@@ -520,7 +540,7 @@ class WeWorkIP(_PluginBase):
                                         'props': {
                                             'type': 'info',
                                             'variant': 'tonal',
-                                            'text': 'cookie需填入HeaderString的格式,后台固定半小时验证一次cookie,和这里设置的检测周期无关。'
+                                            'text': 'cookie需填入HeaderString的格式,后台固定间隔验证一次cookie,和这里设置的检测周期无关。'
                                         }
                                     }
                                 ]
