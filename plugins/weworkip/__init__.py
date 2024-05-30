@@ -24,7 +24,7 @@ class WeWorkIP(_PluginBase):
     # 插件图标
     plugin_icon = ""
     # 插件版本
-    plugin_version = "1.0.5"
+    plugin_version = "1.0.6"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -72,7 +72,7 @@ class WeWorkIP(_PluginBase):
         self._overwrite = True
         self._use_cookiecloud = True
         self._cookie_valid = False
-        self._ip_changed = False
+        self._ip_changed = True
 
         if config:
             self._enabled = config.get("enabled")
@@ -84,7 +84,9 @@ class WeWorkIP(_PluginBase):
             self._current_ip_address = config.get("current_ip_address")
             self._use_cookiecloud = config.get("use_cookiecloud")
             self._ip_changed = config.get("ip_changed")
-            
+        
+        if self._ip_changed == None:
+            self._ip_changed = True
         # 停止现有任务
         self.stop_service()
 
