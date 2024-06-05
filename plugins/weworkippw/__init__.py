@@ -22,11 +22,11 @@ class WeWorkIPPW(_PluginBase):
     # 插件图标
     plugin_icon = ""
     # 插件版本
-    plugin_version = "1.0.3"
+    plugin_version = "1.1"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
-    author_url = "https://github.com/suraxiuxiu"
+    author_url = "https://github.com/suraxiuxiu/MoviePilot-Plugins"
     # 插件配置项ID前缀
     plugin_config_prefix = "weworkippw_"
     # 加载顺序
@@ -42,8 +42,11 @@ class WeWorkIPPW(_PluginBase):
     _current_ip_address = '192.168.1.1'
     #企业微信应用管理地址
     _wechatUrl=f'https://work.weixin.qq.com/wework_admin/frame#/apps/modApiApp/00000000000'
+    _urls = []
     #登录cookie
     _cookie_header = ""
+    #从CookieCloud获取的cookie
+    _cookie_from_CC = ""
     #覆盖已填写的IP,设置FALSE则添加新IP到已有IP列表里
     _overwrite = True
 
@@ -67,22 +70,25 @@ class WeWorkIPPW(_PluginBase):
         # 清空配置
         self._wechatUrl = ''
         self._cookie_header = ""
+        self._cookie_from_CC = ""
         self._overwrite = True
         self._use_cookiecloud = True
         self._cookie_valid = False
+        
         self._ip_changed = True
-
+        self._urls = []
         if config:
             self._enabled = config.get("enabled")
             self._cron = config.get("cron")
             self._onlyonce = config.get("onlyonce")
             self._wechatUrl = config.get("wechatUrl")
             self._cookie_header = config.get("cookie_header")
+            self._cookie_from_CC = config.get("cookie_from_CC")
             self._overwrite = config.get("overwrite")
             self._current_ip_address = config.get("current_ip_address")
             self._use_cookiecloud = config.get("use_cookiecloud")
             self._ip_changed = config.get("ip_changed")
-        
+        self._urls = self._wechatUrl.split(',')
         if self._ip_changed == None:
             self._ip_changed = True
                 
@@ -201,7 +207,7 @@ class WeWorkIPPW(_PluginBase):
                 cookie = self.get_cookie()
                 context.add_cookies(cookie)
                 page = context.new_page()
-                page.goto(self._wechatUrl)
+                page.goto(self._urls[0])
                 time.sleep(1)
                 login = page.locator('.login_stage_title_text')
                 # 检查登录元素是否可见
@@ -212,20 +218,22 @@ class WeWorkIPPW(_PluginBase):
                 else:
                     logger.info("加载企微管理界面成功")
                     self._cookie_valid = True
-                logger.info("正在更改IP地址")
-                open_ip_config = page.locator('div.app_card_operate.js_show_ipConfig_dialog')
-                open_ip_config.click()
-                page.wait_for_selector('textarea.js_ipConfig_textarea')
-                input_area = page.locator('textarea.js_ipConfig_textarea')
-                confirm = page.locator('.js_ipConfig_confirmBtn')
-                existing_ip = input_area.input_value()
-                if self._overwrite:
-                    input_area.fill(self._current_ip_address)
-                else:
-                    input_area.fill(f'{existing_ip};{self._current_ip_address}')
-                confirm.click()
-                time.sleep(1)
-                logger.info("更改IP地址成功")
+                for index, url in enumerate(self._urls):           
+                    logger.info(f"正在更改第{index}个应用的可信IP")
+                    page.goto(url)
+                    page.wait_for_selector('div.app_card_operate.js_show_ipConfig_dialog')
+                    page.locator('div.app_card_operate.js_show_ipConfig_dialog').click()
+                    page.wait_for_selector('textarea.js_ipConfig_textarea')
+                    input_area = page.locator('textarea.js_ipConfig_textarea')
+                    confirm = page.locator('.js_ipConfig_confirmBtn')
+                    existing_ip = input_area.input_value()
+                    if self._overwrite:
+                        input_area.fill(self._current_ip_address)
+                    else:
+                        input_area.fill(f'{existing_ip};{self._current_ip_address}')
+                    confirm.click()
+                    time.sleep(1)
+                    logger.info("更改第{index}个应用的可信IP成功")
                 self._ip_changed = True
                 browser.close() 
         except Exception as e:
@@ -240,7 +248,7 @@ class WeWorkIPPW(_PluginBase):
                 cookie = self.get_cookie()
                 context.add_cookies(cookie)
                 page = context.new_page()
-                page.goto(self._wechatUrl)
+                page.goto(self._urls[0])
                 login = page.locator('.login_stage_title_text')
             # 检查登录元素是否可见
                 if login.is_visible():
@@ -270,6 +278,8 @@ class WeWorkIPPW(_PluginBase):
         try:
             cookie_header = ''
             if self._use_cookiecloud:
+                if self._cookie_valid:
+                    return self._cookie_from_CC
                 logger.info("尝试从CookieCloud同步企微cookie ...")
                 cookies, msg = self._cookiecloud.download()
                 if not cookies:
@@ -285,6 +295,7 @@ class WeWorkIPPW(_PluginBase):
             else:                
                 cookie_header = self._cookie_header
             cookie = self.parse_cookie_header(cookie_header)
+            self._cookie_from_CC = cookie
             return cookie
         except Exception as e:
                 logger.error(f"获取cookie失败:{e}") 
@@ -300,6 +311,7 @@ class WeWorkIPPW(_PluginBase):
             "cron": self._cron,
             "wechatUrl": self._wechatUrl,
             "cookie_header": self._cookie_header,
+            "cookie_from_CC": self._cookie_from_CC,
             "overwrite": self._overwrite,
             "current_ip_address": self._current_ip_address,
             "use_cookiecloud": self._use_cookiecloud,
@@ -484,8 +496,8 @@ class WeWorkIPPW(_PluginBase):
                                         'props': {
                                             'model': 'wechatUrl',
                                             'label': '应用网址',
-                                            'rows': 1,
-                                            'placeholder': '企业微信应用的管理网址,类似于https://work.weixin.qq.com/wework_admin/frame#/apps/modApiApp/00000000000'
+                                            'rows': 2,
+                                            'placeholder': '企业微信应用的管理网址 多个地址用,分隔 地址类似于https://work.weixin.qq.com/wework_admin/frame#/apps/modApiApp/00000000000'
                                         }
                                     }
                                 ]
@@ -569,7 +581,7 @@ class WeWorkIPPW(_PluginBase):
                                         'props': {
                                             'type': 'info',
                                             'variant': 'tonal',
-                                            'text': 'cookie获取插件：https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm'
+                                            'text': '手动cookie获取教程:https://github.com/suraxiuxiu/MoviePilot-Plugins,推荐先看一次'
                                         }
                                     }
                                 ]

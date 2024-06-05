@@ -24,11 +24,11 @@ class WeWorkIP(_PluginBase):
     # 插件图标
     plugin_icon = ""
     # 插件版本
-    plugin_version = "1.0.6"
+    plugin_version = "1.1"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
-    author_url = "https://github.com/suraxiuxiu"
+    author_url = "https://github.com/suraxiuxiu/MoviePilot-Plugins"
     # 插件配置项ID前缀
     plugin_config_prefix = "weworkip_"
     # 加载顺序
@@ -44,8 +44,11 @@ class WeWorkIP(_PluginBase):
     _current_ip_address = '192.168.1.1'
     #企业微信应用管理地址
     _wechatUrl=f'https://work.weixin.qq.com/wework_admin/frame#/apps/modApiApp/00000000000'
+    _urls = []
     #登录cookie
     _cookie_header = ""
+    #从CookieCloud获取的cookie
+    _cookie_from_CC = ""
     #覆盖已填写的IP,设置FALSE则添加新IP到已有IP列表里
     _overwrite = True
 
@@ -69,22 +72,24 @@ class WeWorkIP(_PluginBase):
         # 清空配置
         self._wechatUrl = ''
         self._cookie_header = ""
+        self._cookie_from_CC = ""
         self._overwrite = True
         self._use_cookiecloud = True
         self._cookie_valid = False
         self._ip_changed = True
-
+        self._urls = []
         if config:
             self._enabled = config.get("enabled")
             self._cron = config.get("cron")
             self._onlyonce = config.get("onlyonce")
             self._wechatUrl = config.get("wechatUrl")
             self._cookie_header = config.get("cookie_header")
+            self._cookie_from_CC = config.get("cookie_from_CC")
             self._overwrite = config.get("overwrite")
             self._current_ip_address = config.get("current_ip_address")
             self._use_cookiecloud = config.get("use_cookiecloud")
             self._ip_changed = config.get("ip_changed")
-        
+        self._urls = self._wechatUrl.split(',')
         if self._ip_changed == None:
             self._ip_changed = True
         # 停止现有任务
@@ -198,14 +203,14 @@ class WeWorkIP(_PluginBase):
         options = webdriver.EdgeOptions()
         options.add_argument('--headless')  # 无头模式
         driver = webdriver.Edge(options=options)
-        driver.get(self._wechatUrl)
+        driver.get(self._urls[0])
         time.sleep(1)  
         driver.delete_all_cookies()
         cookies = self.get_cookie()
         for cookie in cookies:
             name, value = cookie.split('=')
             driver.add_cookie({"name": name, "value": value})
-        driver.get(self._wechatUrl)
+        driver.get(self._urls[0])
         time.sleep(1)
         try:
             driver.find_element(By.CLASS_NAME,'login_stage_title_text')
@@ -217,19 +222,22 @@ class WeWorkIP(_PluginBase):
             self._cookie_valid = True
         #开始更改ip地址
         try:
-            logger.info("正在更改IP地址")
-            setip = driver.find_element(By.XPATH,'//div[contains(@class, "app_card_operate") and contains(@class, "js_show_ipConfig_dialog")]')
-            setip.click()
-            time.sleep(1)
-            inputArea = driver.find_element(By.XPATH,'//textarea[@class="js_ipConfig_textarea"]')
-            confirm = driver.find_element(By.XPATH,'//a[@class="qui_btn ww_btn ww_btn_Blue js_ipConfig_confirmBtn"]')
-            if self._overwrite:
-                inputArea.clear()
-                inputArea.send_keys(self._current_ip_address)
-            inputArea.send_keys(f';{self._current_ip_address}')
-            confirm.click()
-            time.sleep(1)
-            logger.info("更改IP地址成功")      
+            for index, url in enumerate(self._urls):
+                driver.get(url)
+                time.sleep(1)
+                logger.info(f"正在更改第{index}个应用的可信IP")
+                setip = driver.find_element(By.XPATH,'//div[contains(@class, "app_card_operate") and contains(@class, "js_show_ipConfig_dialog")]')
+                setip.click()
+                time.sleep(1)
+                inputArea = driver.find_element(By.XPATH,'//textarea[@class="js_ipConfig_textarea"]')
+                confirm = driver.find_element(By.XPATH,'//a[@class="qui_btn ww_btn ww_btn_Blue js_ipConfig_confirmBtn"]')
+                if self._overwrite:
+                    inputArea.clear()
+                    inputArea.send_keys(self._current_ip_address)
+                inputArea.send_keys(f';{self._current_ip_address}')
+                confirm.click()
+                time.sleep(1)
+                logger.info("更改第{index}个应用的可信IP成功")      
             self._ip_changed = True 
         except Exception as e:
             logger.error(f"更改可信IP失败: {e}")       
@@ -240,14 +248,14 @@ class WeWorkIP(_PluginBase):
             options = webdriver.EdgeOptions()
             options.add_argument('--headless')  # 无头模式
             driver = webdriver.Edge(options=options)
-            driver.get(self._wechatUrl)
+            driver.get(self._urls[0])
             time.sleep(1)  
             driver.delete_all_cookies()
             cookies = self.get_cookie()
             for cookie in cookies:
                 name, value = cookie.split('=')
                 driver.add_cookie({"name": name, "value": value})
-            driver.get(self._wechatUrl)
+            driver.get(self._urls[0])
             try:
                 driver.find_element(By.CLASS_NAME,'login_stage_title_text')
                 logger.error("cookie失效,请重新获取")
@@ -265,6 +273,8 @@ class WeWorkIP(_PluginBase):
         cookie_header = ''
         try:
             if self._use_cookiecloud:
+                if self._cookie_valid:
+                    return self._cookie_from_CC
                 logger.info("尝试从CookieCloud同步企微cookie ...")
                 cookies, msg = self._cookiecloud.download()
                 if not cookies:
@@ -279,6 +289,7 @@ class WeWorkIP(_PluginBase):
                         cookie_header = self._cookie_header.split(';')
             else:                
                 cookie_header = self._cookie_header.split(';')
+            self._cookie_from_CC = cookie_header
             return cookie_header
         except Exception as e:
                 logger.error(f"获取cookie失败:{e}") 
@@ -294,6 +305,7 @@ class WeWorkIP(_PluginBase):
             "cron": self._cron,
             "wechatUrl": self._wechatUrl,
             "cookie_header": self._cookie_header,
+            "cookie_from_CC": self._cookie_from_CC,
             "overwrite": self._overwrite,
             "current_ip_address": self._current_ip_address,
             "use_cookiecloud": self._use_cookiecloud,
@@ -478,8 +490,8 @@ class WeWorkIP(_PluginBase):
                                         'props': {
                                             'model': 'wechatUrl',
                                             'label': '应用网址',
-                                            'rows': 1,
-                                            'placeholder': '企业微信应用的管理网址,类似于https://work.weixin.qq.com/wework_admin/frame#/apps/modApiApp/00000000000'
+                                            'rows': 2,
+                                            'placeholder': '企业微信应用的管理网址 多个地址用,分隔 地址类似于https://work.weixin.qq.com/wework_admin/frame#/apps/modApiApp/00000000000'
                                         }
                                     }
                                 ]
@@ -563,7 +575,7 @@ class WeWorkIP(_PluginBase):
                                         'props': {
                                             'type': 'info',
                                             'variant': 'tonal',
-                                            'text': 'cookie获取插件：https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm'
+                                            'text': '手动cookie获取教程:https://github.com/suraxiuxiu/MoviePilot-Plugins,推荐先看一次'
                                         }
                                     }
                                 ]

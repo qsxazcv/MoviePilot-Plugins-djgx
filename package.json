@@ -3,18 +3,24 @@
         "name": "企微自动配置IP",
         "description": "!!docker用户请使用PW版!!定时获取最新动态公网IP，配置到企业微信应用的可信IP列表里。使用selenium运行的版本,适合Windows用户使用",
         "labels": "消息通知",
-        "version": "1.0.6",
+        "version": "1.1",
         "icon": "statistic.png",
         "author": "suraxiuxiu",
-        "level": 2
+        "level": 2,
+        "history": {
+            "v1.1": "优化cookie获取方式;支持多个应用地址,用,号分隔应用网址。"
+        }
     },
     "WeWorkIPPW": {
         "name": "企微自动配置IPpw版",
         "description": "!!docker用户用这个版本!!定时获取最新动态公网IP，配置到企业微信应用的可信IP列表里。使用playWright运行的版本,适合docker用户使用",
         "labels": "消息通知",
-        "version": "1.0.3",
+        "version": "1.1",
         "icon": "statistic.png",
         "author": "suraxiuxiu",
-        "level": 2
+        "level": 2,
+        "history": {
+            "v1.1": "优化cookie获取方式;支持多个应用地址,用,号分隔应用网址。"
+        }
     }
 }
