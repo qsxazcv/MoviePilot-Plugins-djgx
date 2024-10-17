@@ -1,4 +1,5 @@
 自动设置动态IP到企业微信应用可信IP
+默认使用CookieCloud同步登录cookie 以下是手动获取流程
 
 使用浏览器cookie插件(([Cookie Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm))导出HeaderString格式的cookie,
 登录企业微信后按下图所示导出cookie
