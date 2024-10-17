@@ -24,7 +24,7 @@ class WeWorkIP(_PluginBase):
     # 插件图标
     plugin_icon = ""
     # 插件版本
-    plugin_version = "1.1"
+    plugin_version = "1.2"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -88,6 +88,7 @@ class WeWorkIP(_PluginBase):
             self._overwrite = config.get("overwrite")
             self._current_ip_address = config.get("current_ip_address")
             self._use_cookiecloud = config.get("use_cookiecloud")
+            self._cookie_valid = config.get("cookie_valid")
             self._ip_changed = config.get("ip_changed")
         self._urls = self._wechatUrl.split(',')
         if self._ip_changed == None:
@@ -201,7 +202,7 @@ class WeWorkIP(_PluginBase):
         logger.info("开始请求企业微信管理更改可信IP")
         # 解析 Cookie 字符串为字典
         options = webdriver.EdgeOptions()
-        options.add_argument('--headless')  # 无头模式
+        options.add_argument('--headless=old')
         driver = webdriver.Edge(options=options)
         driver.get(self._urls[0])
         time.sleep(1)  
@@ -216,6 +217,7 @@ class WeWorkIP(_PluginBase):
             driver.find_element(By.CLASS_NAME,'login_stage_title_text')
             logger.error("cookie失效,请重新获取")
             self._cookie_valid = False
+            driver.quit()   
             return
         except Exception as e:
             logger.info("加载企微管理界面成功")
@@ -225,7 +227,7 @@ class WeWorkIP(_PluginBase):
             for index, url in enumerate(self._urls):
                 driver.get(url)
                 time.sleep(1)
-                logger.info(f"正在更改第{index}个应用的可信IP")
+                logger.info(f"正在更改第{index+1}个应用的可信IP")
                 setip = driver.find_element(By.XPATH,'//div[contains(@class, "app_card_operate") and contains(@class, "js_show_ipConfig_dialog")]')
                 setip.click()
                 time.sleep(1)
@@ -237,7 +239,7 @@ class WeWorkIP(_PluginBase):
                 inputArea.send_keys(f';{self._current_ip_address}')
                 confirm.click()
                 time.sleep(1)
-                logger.info("更改第{index}个应用的可信IP成功")      
+                logger.info(f"更改第{index+1}个应用的可信IP成功")      
             self._ip_changed = True 
         except Exception as e:
             logger.error(f"更改可信IP失败: {e}")       
@@ -246,7 +248,7 @@ class WeWorkIP(_PluginBase):
     def refresh_cookie(self):
         try:    
             options = webdriver.EdgeOptions()
-            options.add_argument('--headless')  # 无头模式
+            options.add_argument('--headless=old')
             driver = webdriver.Edge(options=options)
             driver.get(self._urls[0])
             time.sleep(1)  
@@ -260,7 +262,6 @@ class WeWorkIP(_PluginBase):
                 driver.find_element(By.CLASS_NAME,'login_stage_title_text')
                 logger.error("cookie失效,请重新获取")
                 self._cookie_valid = False
-                return
             except Exception as e:
                 logger.info("cookie有效校验成功")
                 self._cookie_valid = True
@@ -290,6 +291,7 @@ class WeWorkIP(_PluginBase):
             else:                
                 cookie_header = self._cookie_header.split(';')
             self._cookie_from_CC = cookie_header
+            self.__update_config()
             return cookie_header
         except Exception as e:
                 logger.error(f"获取cookie失败:{e}") 
@@ -309,6 +311,7 @@ class WeWorkIP(_PluginBase):
             "overwrite": self._overwrite,
             "current_ip_address": self._current_ip_address,
             "use_cookiecloud": self._use_cookiecloud,
+            "cookie_valid": self._cookie_valid,
             "ip_changed": self._ip_changed
         })
 

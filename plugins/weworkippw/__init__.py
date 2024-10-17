@@ -22,7 +22,7 @@ class WeWorkIPPW(_PluginBase):
     # 插件图标
     plugin_icon = ""
     # 插件版本
-    plugin_version = "1.1"
+    plugin_version = "1.2"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -87,6 +87,7 @@ class WeWorkIPPW(_PluginBase):
             self._overwrite = config.get("overwrite")
             self._current_ip_address = config.get("current_ip_address")
             self._use_cookiecloud = config.get("use_cookiecloud")
+            self._cookie_valid = config.get("cookie_valid")
             self._ip_changed = config.get("ip_changed")
         self._urls = self._wechatUrl.split(',')
         if self._ip_changed == None:
@@ -214,12 +215,13 @@ class WeWorkIPPW(_PluginBase):
                 if login.is_visible():
                     logger.info("cookie失效,请重新获取")
                     self._cookie_valid = False
+                    browser.close()
                     return
                 else:
                     logger.info("加载企微管理界面成功")
                     self._cookie_valid = True
                 for index, url in enumerate(self._urls):           
-                    logger.info(f"正在更改第{index}个应用的可信IP")
+                    logger.info(f"正在更改第{index+1}个应用的可信IP")
                     page.goto(url)
                     page.wait_for_selector('div.app_card_operate.js_show_ipConfig_dialog')
                     page.locator('div.app_card_operate.js_show_ipConfig_dialog').click()
@@ -233,7 +235,7 @@ class WeWorkIPPW(_PluginBase):
                         input_area.fill(f'{existing_ip};{self._current_ip_address}')
                     confirm.click()
                     time.sleep(1)
-                    logger.info("更改第{index}个应用的可信IP成功")
+                    logger.info(f"更改第{index+1}个应用的可信IP成功")
                 self._ip_changed = True
                 browser.close() 
         except Exception as e:
@@ -243,7 +245,7 @@ class WeWorkIPPW(_PluginBase):
     def refresh_cookie(self):
         try:    
             with sync_playwright() as p:
-                browser = p.chromium.launch(headless=False)
+                browser = p.chromium.launch(headless=True)
                 context = browser.new_context()
                 cookie = self.get_cookie()
                 context.add_cookies(cookie)
@@ -296,6 +298,7 @@ class WeWorkIPPW(_PluginBase):
                 cookie_header = self._cookie_header
             cookie = self.parse_cookie_header(cookie_header)
             self._cookie_from_CC = cookie
+            self.__update_config()
             return cookie
         except Exception as e:
                 logger.error(f"获取cookie失败:{e}") 
@@ -315,6 +318,7 @@ class WeWorkIPPW(_PluginBase):
             "overwrite": self._overwrite,
             "current_ip_address": self._current_ip_address,
             "use_cookiecloud": self._use_cookiecloud,
+            "cookie_valid": self._cookie_valid,
             "ip_changed": self._ip_changed
         })
 
