@@ -1,5 +1,8 @@
+import base64
 import re
+import os
 import time
+from urllib.parse import urljoin
 import requests
 from datetime import datetime, timedelta
 import pytz
@@ -12,17 +15,19 @@ from app.log import logger
 from app.plugins import _PluginBase
 from app.core.config import settings
 from app.helper.cookiecloud import CookieCloudHelper
+from app.modules.wechat import WeChat
+
 from playwright.sync_api import sync_playwright
 
 class WeWorkIPPW(_PluginBase):
     # 插件名称
-    plugin_name = "企微自动配置IPpw版"
+    plugin_name = "企微自动配置IP-Docker版"
     # 插件描述
     plugin_desc = "!!docker用户用这个版本!!定时获取最新动态公网IP，配置到企业微信应用的可信IP列表里。"
     # 插件图标
-    plugin_icon = ""
+    plugin_icon = "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true"
     # 插件版本
-    plugin_version = "1.2"
+    plugin_version = "2.0"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -34,6 +39,16 @@ class WeWorkIPPW(_PluginBase):
     # 可使用的用户级别
     auth_level = 2
 
+    script_path = os.path.abspath(__file__)
+    script_dir = os.path.dirname(script_path)
+    loading_path = "loading.gif"
+    qr_path = 'QR.png'
+    loading_path = os.path.join(script_dir, loading_path)
+    qr_path = os.path.join(script_dir, qr_path)
+    with open(loading_path, 'rb') as image_file:
+        loading_data = image_file.read()
+        base64_loading = base64.b64encode(loading_data).decode('utf-8')
+    loading_src = f"data:image/gif;base64,{base64_loading}"
     #匹配ip地址的正则
     _ip_pattern = r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
     #获取ip地址的网址列表
@@ -45,8 +60,10 @@ class WeWorkIPPW(_PluginBase):
     _urls = []
     #登录cookie
     _cookie_header = ""
-    #从CookieCloud获取的cookie
+    # 从CookieCloud或内置登录获取的cookie
     _cookie_from_CC = ""
+    # 发送二维码给指定成员,为空则发送给全部成员
+    _qr_send_users = ""
     #覆盖已填写的IP,设置FALSE则添加新IP到已有IP列表里
     _overwrite = True
 
@@ -56,11 +73,14 @@ class WeWorkIPPW(_PluginBase):
     _cookie_valid = False
     #IP更改成功状态,防止检测IP改动但cookie失效的时候_current_ip_address已经更新成新IP导致后面刷新cookie也没有更改企微IP
     _ip_changed = False
-    #检测间隔时间,默认10分钟,太久会导致cookie失效
-    _refresh_cron = '*/10 * * * *'
+    # 检测间隔时间,默认5分钟,太久会导致cookie失效
+    _refresh_cron = "*/5 * * * *"
+    # 登录循环时间 
+    _login_cron = "*/2 * * * *"
     _cron = None
     _enabled = False
     _onlyonce = False
+    _built_in_login = True
     _cookiecloud = CookieCloudHelper()
 
     # 定时器
@@ -70,12 +90,13 @@ class WeWorkIPPW(_PluginBase):
         # 清空配置
         self._wechatUrl = ''
         self._cookie_header = ""
+        self._qr_send_users = ""
         self._cookie_from_CC = ""
         self._overwrite = True
         self._use_cookiecloud = True
         self._cookie_valid = False
-        
         self._ip_changed = True
+        self._built_in_login = True
         self._urls = []
         if config:
             self._enabled = config.get("enabled")
@@ -83,16 +104,25 @@ class WeWorkIPPW(_PluginBase):
             self._onlyonce = config.get("onlyonce")
             self._wechatUrl = config.get("wechatUrl")
             self._cookie_header = config.get("cookie_header")
+            self._qr_send_users = config.get("qr_send_users")
             self._cookie_from_CC = config.get("cookie_from_CC")
             self._overwrite = config.get("overwrite")
             self._current_ip_address = config.get("current_ip_address")
             self._use_cookiecloud = config.get("use_cookiecloud")
             self._cookie_valid = config.get("cookie_valid")
             self._ip_changed = config.get("ip_changed")
+            self._built_in_login = config.get("built_in_login")
         self._urls = self._wechatUrl.split(',')
         if self._ip_changed == None:
             self._ip_changed = True
-                
+        if self._built_in_login == None:
+            self._built_in_login = True
+        if self._cookie_valid == None:
+            self._cookie_valid = False
+        if self._use_cookiecloud == None:
+            self._use_cookiecloud = True
+        if self._overwrite == None:
+            self._overwrite = True
         # 停止现有任务
         self.stop_service()
 
@@ -102,27 +132,36 @@ class WeWorkIPPW(_PluginBase):
             # 运行一次定时服务
             if self._onlyonce:
                 logger.info("立即检测公网IP")
-                self._scheduler.add_job(func=self.check, trigger='date',
-                                        run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
-                                        name="检测公网IP")
+                self._scheduler.add_job(
+                    func=self.check,
+                    trigger="date",
+                    run_date=datetime.now(tz=pytz.timezone(settings.TZ))
+                    + timedelta(seconds=3),
+                    name="检测公网IP",
+                )
                 # 关闭一次性开关
                 self._onlyonce = False
 
-            # 固定半小时周期请求一次地址,防止cookie失效        
-            try:
-                self._scheduler.add_job(func=self.refresh_cookie,
-                                        trigger=CronTrigger.from_crontab(self._refresh_cron),
-                                        name="延续企业微信cookie有效时间")
-            except Exception as err:
-                logger.error(f"定时任务配置错误：{err}")
-                self.systemmessage.put(f"执行周期配置错误：{err}")
-                
+            if not self._cookie_valid:
+                if self._built_in_login:
+                    self._scheduler.add_job(
+                        func=self.login,
+                        trigger="date",
+                        run_date=datetime.now(tz=pytz.timezone(settings.TZ))
+                        + timedelta(seconds=1),
+                        name="插件初始化检测到缓存失效,唤起一次登录"
+                    )
+                else:
+                    self.create_refresh_job()
+            else:
+                self.create_refresh_job()
             # 启动任务
             if self._scheduler.get_jobs():
                 self._scheduler.print_jobs()
                 self._scheduler.start()
-        self.__update_config()        
-            
+        #self.refresh_cookie()
+        self.__update_config()
+
     @eventmanager.register(EventType.PluginAction)
     def check(self, event: Event = None):
         """
@@ -154,11 +193,9 @@ class WeWorkIPPW(_PluginBase):
         
     def CheckIP(self):
         if not self._cookie_valid:
-            self.refresh_cookie()
-            if not self._cookie_valid:
-                logger.error("请求企微失败,cookie可能过期,跳过IP检测")
-                return False
-        if not self._ip_changed:#上次IP变更没有改动到企微 再次请求该IP
+            logger.error("请求企微失败,cookie可能过期,跳过IP检测")
+            return False
+        if not self._ip_changed:  # 上次IP变更没有改动到企微 再次请求该IP
             return True
         for url in self._ip_urls:
             ip_address = self.get_ip_from_url(url)
@@ -176,14 +213,14 @@ class WeWorkIPPW(_PluginBase):
             self._ip_changed = False
             return True
         else:
-            #logger.info("公网IP未变化")
+            # logger.info("公网IP未变化")
             return False
-            
-    def get_ip_from_url(self,url):
+
+    def get_ip_from_url(self, url):
         try:
             # 发送 GET 请求
             response = requests.get(url)
-        
+
             # 检查响应状态码是否为 200
             if response.status_code == 200:
                 # 解析响应 JSON 数据并获取 IP 地址
@@ -243,26 +280,45 @@ class WeWorkIPPW(_PluginBase):
                 self._cookie_valid = False    
     
     def refresh_cookie(self):
+        logger.info("开始刷新企业微信缓存")
         try:    
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
                 context = browser.new_context()
                 cookie = self.get_cookie()
+                if cookie == '':
+                    logger.error('cookie为空,请检查CC配置和插件手动填写项')
+                    browser.close()
+                    self._cookie_valid = False
+                    if self._built_in_login:
+                        if self._scheduler.get_job("refresh_cookie"):
+                            self._scheduler.remove_job("refresh_cookie")
+                        if not self._scheduler.get_job("wwlogin"):
+                            self.create_login_job()
+                    return
                 context.add_cookies(cookie)
                 page = context.new_page()
                 page.goto(self._urls[0])
+                time.sleep(2)
                 login = page.locator('.login_stage_title_text')
             # 检查登录元素是否可见
                 if login.is_visible():
                     logger.info("cookie失效,请重新获取")
                     self._cookie_valid = False
+                    if self._built_in_login:
+                        if self._scheduler.get_job("refresh_cookie"):
+                            self._scheduler.remove_job("refresh_cookie")
+                        if not self._scheduler.get_job("wwlogin"):
+                            self.create_login_job()
                 else:
                     logger.info("cookie有效校验成功")
                     self._cookie_valid = True
                 browser.close()
+            self.__update_config()
         except Exception as e:
                 logger.error(f"cookie校验失败:{e}") 
-                self._cookie_valid = False   
+                self._cookie_valid = False
+                self.__update_config()   
     
     def parse_cookie_header(self,cookie_header):
         cookies = []
@@ -296,6 +352,9 @@ class WeWorkIPPW(_PluginBase):
                         cookie_header = self._cookie_header
             else:                
                 cookie_header = self._cookie_header
+            if cookie_header == '' or cookie_header == None:
+                logger.error("未获取到任何cookie")
+                return ''
             cookie = self.parse_cookie_header(cookie_header)
             self._cookie_from_CC = cookie
             self.__update_config()
@@ -303,24 +362,111 @@ class WeWorkIPPW(_PluginBase):
         except Exception as e:
                 logger.error(f"获取cookie失败:{e}") 
                 return cookie
+
+    def login(self):
+        logger.info("开始登录企业微信")
+        logger.info("进行一次缓存检测")
+        self.refresh_cookie()
+        if self._cookie_valid:
+            logger.info("已使用其他有效缓存,跳过登录")
+            if not self._scheduler.get_job("refresh_cookie"):
+                self.create_refresh_job()
+            if self._scheduler.get_job("wwlogin"):
+                self._scheduler.remove_job("wwlogin")
+            return
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context()
+                try:
+                    page = context.new_page()
+                    page.goto(self._urls[0])
+                    iframe_element = page.frame_locator('iframe[src*="login_qrcode"]')
+                    qr_img_element = iframe_element.locator('.qrcode_login_img')
+                    qr_img_element.wait_for(state="visible", timeout=2000)
+                    qr_img_relative_url = qr_img_element.get_attribute('src')
+                    base_url = page.url
+                    absolute_url = urljoin(base_url, qr_img_relative_url)
+                    WeChat().send_msg(title = "点击扫描二维码登录企业微信",image=absolute_url,link=absolute_url,userid=self._qr_send_users)
+                    response = requests.get(absolute_url)
+                    if response.status_code == 200:
+                        with open(self.qr_path, "wb") as file:
+                            file.write(response.content)
+                        logger.info("打开插件详情扫描二维码登录企业微信")
+                    else:
+                        logger.info("无法下载二维码图片：", response.status_code)
+                    try:
+                        page.wait_for_url('https://work.weixin.qq.com/wework_admin/frame*', timeout=60000)
+                        cookies = context.cookies()
+                        cookies2 = ';'.join([f"{cookie['name']}={cookie['value']}" for cookie in cookies])
+                        self._cookie_from_CC = self.parse_cookie_header(cookies2)
+                        self._cookie_valid = True
+                        logger.info("登录企业微信成功")
+                        if not self._scheduler.get_job("refresh_cookie"):
+                            self.create_refresh_job()
+                        if self._scheduler.get_job("wwlogin"):
+                            self._scheduler.remove_job("wwlogin")
+                    except Exception as e:
+                        logger.error(f"登录超时")
+                        WeChat().send_msg(title = "二维码失效",text = "请等待扫描下一个二维码,间隔大约一分钟",userid=self._qr_send_users)
+                        self._cookie_valid = False
+                except Exception as e:
+                    logger.error(f"登录失败:{e}")
+                    self._cookie_valid = False
+                browser.close()
+            self.__update_config()
+            if os.path.exists(self.qr_path):
+                os.remove(self.qr_path)
+        except Exception as e:
+                logger.error(f"登录失败:{e}")
     
+    def create_refresh_job(self):
+        logger.info("创建定时刷新企业微信缓存任务")
+        try:
+                self._scheduler.add_job(
+                    func=self.refresh_cookie,
+                    trigger=CronTrigger.from_crontab(self._refresh_cron),
+                    name="延续企业微信cookie有效时间",
+                    id="refresh_cookie"
+                )
+        except Exception as err:
+                logger.error(f"定时刷新企业微信缓存任务配置错误：{err}")
+                self.systemmessage.put(f"定时刷新企业微信缓存任务配置错误：{err}")
+        
+    def create_login_job(self):
+        logger.info("创建定时唤起企业微信登录任务")
+        try:
+                self._scheduler.add_job(
+                    func=self.login,
+                    trigger=CronTrigger.from_crontab(self._login_cron),
+                    name="定时唤起企业微信登录",
+                    id="wwlogin"
+                )
+        except Exception as err:
+                logger.error(f"定时唤起企业登录任务配置错误：{err}")
+                self.systemmessage.put(f"定时唤起企业登录配置错误：{err}")
+                
     def __update_config(self):
         """
         更新配置
         """
-        self.update_config({
-            "enabled": self._enabled,
-            "onlyonce": self._onlyonce,
-            "cron": self._cron,
-            "wechatUrl": self._wechatUrl,
-            "cookie_header": self._cookie_header,
-            "cookie_from_CC": self._cookie_from_CC,
-            "overwrite": self._overwrite,
-            "current_ip_address": self._current_ip_address,
-            "use_cookiecloud": self._use_cookiecloud,
-            "cookie_valid": self._cookie_valid,
-            "ip_changed": self._ip_changed
-        })
+        self.update_config(
+            {
+                "enabled": self._enabled,
+                "onlyonce": self._onlyonce,
+                "cron": self._cron,
+                "wechatUrl": self._wechatUrl,
+                "cookie_header": self._cookie_header,
+                "qr_send_users": self._qr_send_users,
+                "cookie_from_CC": self._cookie_from_CC,
+                "overwrite": self._overwrite,
+                "current_ip_address": self._current_ip_address,
+                "use_cookiecloud": self._use_cookiecloud,
+                "cookie_valid": self._cookie_valid,
+                "ip_changed": self._ip_changed,
+                "built_in_login": self._built_in_login,
+            }
+        )
 
     def get_state(self) -> bool:
         return self._enabled
@@ -361,7 +507,7 @@ class WeWorkIPPW(_PluginBase):
                 "kwargs": {}
             }]
         return []
-
+            
     def get_api(self) -> List[Dict[str, Any]]:
         pass
 
@@ -371,249 +517,263 @@ class WeWorkIPPW(_PluginBase):
         """
         return [
             {
-                'component': 'VForm',
-                'content': [
+                "component": "VForm",
+                "content": [
                     {
-                        'component': 'VRow',
-                        'content': [
+                        "component": "VRow",
+                        "content": [
                             {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 4
-                                },
-                                'content': [
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
                                     {
-                                        'component': 'VSwitch',
-                                        'props': {
-                                            'model': 'enabled',
-                                            'label': '启用插件',
-                                        }
+                                        "component": "VSwitch",
+                                        "props": {
+                                            "model": "enabled",
+                                            "label": "启用插件",
+                                        },
                                     }
-                                ]
+                                ],
                             },
                             {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 4
-                                },
-                                'content': [
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
                                     {
-                                        'component': 'VSwitch',
-                                        'props': {
-                                            'model': 'onlyonce',
-                                            'label': '立即检测一次',
-                                        }
+                                        "component": "VSwitch",
+                                        "props": {
+                                            "model": "onlyonce",
+                                            "label": "立即检测一次",
+                                        },
                                     }
-                                ]
+                                ],
                             },
                             {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 4
-                                },
-                                'content': [
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
                                     {
-                                        'component': 'VSwitch',
-                                        'props': {
-                                            'model': 'overwrite',
-                                            'label': '覆盖模式',
-                                        }
+                                        "component": "VSwitch",
+                                        "props": {
+                                            "model": "overwrite",
+                                            "label": "覆盖模式",
+                                        },
                                     }
-                                ]
+                                ],
                             },
                             {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 4
-                                },
-                                'content': [
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
                                     {
-                                        'component': 'VSwitch',
-                                        'props': {
-                                            'model': 'use_cookiecloud',
-                                            'label': '使用CookieCloud获取cookie',
-                                        }
+                                        "component": "VSwitch",
+                                        "props": {
+                                            "model": "use_cookiecloud",
+                                            "label": "使用CookieCloud获取cookie",
+                                        },
                                     }
-                                ]
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
+                                    {
+                                        "component": "VSwitch",
+                                        "props": {
+                                            "model": "built_in_login",
+                                            "label": "内置浏览器登录企业微信",
+                                        },
+                                    }
+                                ],
                             }
-                        ]
+                        ],
                     },
                     {
-                        'component': 'VRow',
-                        'content': [
+                        "component": "VRow",
+                        "content": [
                             {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 6
-                                },
-                                'content': [
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 6},
+                                "content": [
                                     {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': 'cron',
-                                            'label': '检测周期',
-                                            'placeholder': '0 * * * *'
-                                        }
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "cron",
+                                            "label": "检测周期",
+                                            "placeholder": "0 * * * *",
+                                        },
                                     }
-                                ]
+                                ],
                             }
-                        ]
+                        ],
                     },
                     {
-                        'component': 'VRow',
-                        'content': [
+                        "component": "VRow",
+                        "content": [
                             {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12
-                                },
-                                'content': [
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
                                     {
-                                        'component': 'VTextarea',
-                                        'props': {
-                                            'model': 'cookie_header',
-                                            'label': 'COOKIE',
-                                            'rows': 1,
-                                            'placeholder': '登录企微后导出HeaderString格式的cookie填到此处,默认使用CookieCloud获取Cookie,如果获取失败会尝试使用此处填写的Cookie'
-                                        }
+                                        "component": "VTextarea",
+                                        "props": {
+                                            "model": "cookie_header",
+                                            "label": "COOKIE",
+                                            "rows": 1,
+                                            "placeholder": "非必须填写项。手动提取HeaderString格式的Cookie，仅在未使用CC和内置登录的情况下使用。",
+                                        },
                                     }
-                                ]
+                                ],
                             }
-                        ]
+                        ],
                     },
                     {
-                        'component': 'VRow',
-                        'content': [
+                        "component": "VRow",
+                        "content": [
                             {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12
-                                },
-                                'content': [
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
                                     {
-                                        'component': 'VTextarea',
-                                        'props': {
-                                            'model': 'wechatUrl',
-                                            'label': '应用网址',
-                                            'rows': 2,
-                                            'placeholder': '企业微信应用的管理网址 多个地址用,分隔 地址类似于https://work.weixin.qq.com/wework_admin/frame#/apps/modApiApp/00000000000'
-                                        }
+                                        "component": "VTextarea",
+                                        "props": {
+                                            "model": "wechatUrl",
+                                            "label": "应用网址",
+                                            "rows": 2,
+                                            "placeholder": "企业微信应用的管理网址 多个地址用,分隔 地址类似于https://work.weixin.qq.com/wework_admin/frame#/apps/modApiApp/00000000000",
+                                        },
                                     }
-                                ]
+                                ],
                             }
-                        ]
+                        ],
                     },
                     {
-                        'component': 'VRow',
-                        'content': [
+                        "component": "VRow",
+                        "content": [
                             {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                },
-                                'content': [
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
                                     {
-                                        'component': 'VAlert',
-                                        'props': {
-                                            'type': 'info',
-                                            'variant': 'tonal',
-                                            'text': '覆盖模式: 开启后新IP会直接覆写到已填写的IP列表,关闭则把新IP添加到已有列表里'
-                                        }
+                                        "component": "VTextarea",
+                                        "props": {
+                                            "model": "qr_send_users",
+                                            "label": "指定企业微信成员ID接收登录二维码,不填则发送给所有成员",
+                                            "rows": 2,
+                                            "placeholder": "ID查看路径: 企业微信-工作台-管理企业-成员与部门管理-单击成员-账号的值",
+                                        },
                                     }
-                                ]
+                                ],
                             }
-                        ]
+                        ],
                     },
                     {
-                        'component': 'VRow',
-                        'content': [
+                        "component": "VRow",
+                        "content": [
                             {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
+                                "component": "VCol",
+                                "props": {
+                                    "cols": 12,
                                 },
-                                'content': [
+                                "content": [
                                     {
-                                        'component': 'VAlert',
-                                        'props': {
-                                            'type': 'info',
-                                            'variant': 'tonal',
-                                            'text': '检测周期：获取动态公网IP的间隔,推荐几分钟检测一次,有新IP才会请求企业微信管理更改'
-                                        }
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "info",
+                                            "variant": "tonal",
+                                            "text": "开启CC和内置登录后,会在插件状态页和企业微信MP应用显示二维码,扫码登录即可正常使用。CC非必须开启，当其他地方登录企业微信时，使用CC获取的Cookie可以避免内置登录顶掉其他地方的登录",
+                                        },
                                     }
-                                ]
+                                ],
                             }
-                        ]
+                        ],
                     },
                     {
-                        'component': 'VRow',
-                        'content': [
+                        "component": "VRow",
+                        "content": [
                             {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
+                                "component": "VCol",
+                                "props": {
+                                    "cols": 12,
                                 },
-                                'content': [
+                                "content": [
                                     {
-                                        'component': 'VAlert',
-                                        'props': {
-                                            'type': 'info',
-                                            'variant': 'tonal',
-                                            'text': 'cookie需填入HeaderString的格式,后台固定间隔验证一次cookie,和这里设置的检测周期无关。'
-                                        }
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "info",
+                                            "variant": "tonal",
+                                            "text": "登录流程，推荐先看一次:https://github.com/suraxiuxiu/MoviePilot-Plugins",
+                                        },
                                     }
-                                ]
+                                ],
                             }
-                        ]
+                        ],
                     },
                     {
-                        'component': 'VRow',
-                        'content': [
+                        "component": "VRow",
+                        "content": [
                             {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
+                                "component": "VCol",
+                                "props": {
+                                    "cols": 12,
                                 },
-                                'content': [
+                                "content": [
                                     {
-                                        'component': 'VAlert',
-                                        'props': {
-                                            'type': 'info',
-                                            'variant': 'tonal',
-                                            'text': '手动cookie获取教程:https://github.com/suraxiuxiu/MoviePilot-Plugins,推荐先看一次'
-                                        }
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "info",
+                                            "variant": "tonal",
+                                            "text": "覆盖模式: 开启后新IP会直接覆写到已填写的IP列表,关闭则把新IP添加到已有列表里",
+                                        },
                                     }
-                                ]
+                                ],
                             }
-                        ]
+                        ],
                     },
                     {
-                        'component': 'VRow',
-                        'content': [
+                        "component": "VRow",
+                        "content": [
                             {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
+                                "component": "VCol",
+                                "props": {
+                                    "cols": 12,
                                 },
-                                'content': [
+                                "content": [
                                     {
-                                        'component': 'VAlert',
-                                        'props': {
-                                            'type': 'info',
-                                            'variant': 'tonal',
-                                            'text': '微信通知代理地址记得改回https://qyapi.weixin.qq.com/并重启MP'
-                                        }
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "info",
+                                            "variant": "tonal",
+                                            "text": "检测周期：获取动态公网IP的间隔,推荐几分钟检测一次,有新IP才会请求企业微信管理更改",
+                                        },
                                     }
-                                ]
+                                ],
                             }
-                        ]
-                    }
-                ]
+                        ],
+                    },
+                    {
+                        "component": "VRow",
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {
+                                    "cols": 12,
+                                },
+                                "content": [
+                                    {
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "info",
+                                            "variant": "tonal",
+                                            "text": "微信通知代理地址记得改回https://qyapi.weixin.qq.com/并重启MP",
+                                        },
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                ],
             }
         ], {
             "enabled": False,
@@ -622,11 +782,154 @@ class WeWorkIPPW(_PluginBase):
             "use_cookiecloud": True,
             "onlyonce": False,
             "cookie_header": "",
-            "wechatUrl": ""
+            "wechatUrl": "",
+            "built_in_login": True,
+            "qr_send_users":""
         }
 
     def get_page(self) -> List[dict]:
-        pass
+        if not self._enabled:
+            vaild_text = "插件未启用"
+            color =  "#F0E68C"
+        elif self._cookie_valid:
+            vaild_text = "缓存有效"
+            color =  "#32CD32"
+        else:
+            vaild_text = "缓存失效"
+            color =  "#ff0000"
+            
+        base_content = [
+                            {
+                                "component": "div",
+                                "props": {
+                                    "style": {
+                                        "textAlign": "center" 
+                                    }
+                                },
+                                "content": [
+                                    {
+                                        "component": "div",
+                                        "text": vaild_text,
+                                        "props": {
+                                            "style": {
+                                                "fontSize": "22px",
+                                                "fontWeight": "bold",
+                                                "color": "#ffffff",
+                                                "backgroundColor": color,
+                                                "padding": "8px",
+                                                "borderRadius": "5px",
+                                                "display": "inline-block", 
+                                                "textAlign": "center",
+                                                "marginBottom": "40px"
+                                            }
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "component": "VRow",
+                                "content": [
+                                    {
+                                        "component": "VCol",
+                                        "props": {
+                                            "cols": 12,
+                                        },
+                                        "content": [
+                                            {
+                                                "component": "VAlert",
+                                                "props": {
+                                                    "type": "info",
+                                                    "variant": "tonal",
+                                                    "text": "展示缓存状态,如果开启内置登录,则会在缓存失效时展示登录二维码",
+                                                },
+                                            }
+                                        ],
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VRow",
+                                "content": [
+                                    {
+                                        "component": "VCol",
+                                        "props": {
+                                            "cols": 12,
+                                        },
+                                        "content": [
+                                            {
+                                                "component": "VAlert",
+                                                "props": {
+                                                    "type": "info",
+                                                    "variant": "tonal",
+                                                    "text": "登录二维码也会发送到企业微信MP应用上,可直接长按识别登录,此处二维码做备用登录",
+                                                },
+                                            }
+                                        ],
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VRow",
+                                "content": [
+                                    {
+                                        "component": "VCol",
+                                        "props": {
+                                            "cols": 12,
+                                        },
+                                        "content": [
+                                            {
+                                                "component": "VAlert",
+                                                "props": {
+                                                    "type": "info",
+                                                    "variant": "tonal",
+                                                    "text": "二维码过期和再次刷新有一分钟左右的刷新间隔,如果不显示二维码,关闭界面等一会再进即可",
+                                                },
+                                            }
+                                        ],
+                                    }
+                                ],
+                            }
+                        ]
+        img_src = self.loading_src
+        if self._cookie_valid or not self._enabled:
+            qr_tip = ""
+        elif os.path.exists(self.qr_path):
+            qr_tip = "扫描二维码登录"
+        else:
+            qr_tip = "二维码被玛露希尔爆破了,等一会再来吧"
+        
+        if os.path.exists(self.qr_path) and self._enabled and not self._cookie_valid:
+            with open(self.qr_path, 'rb') as image_file:
+                image_data = image_file.read()
+                base64_image = base64.b64encode(image_data).decode('utf-8')
+                img_src = f"data:image/png;base64,{base64_image}"
+            
+        # 如果开启了内置登录，插入二维码的组件
+        if self._built_in_login and not self._cookie_valid:
+            base_content[1:1] = [ 
+                                    {
+                                        "component": "div",
+                                        "text": qr_tip,
+                                        "props": {
+                                            "class": "text-center"
+                                        }
+                                    },
+                                    {
+                                        "component": "img",
+                                        "props": {
+                                            "src": img_src,
+                                            "style": {
+                                                "width": "auto",
+                                                "height": "auto",
+                                                "maxWidth": "100%",
+                                                "maxHeight": "100%",
+                                                "display": "block",
+                                                "margin": "0 auto"
+                                            }
+                                        }
+                                    }
+                                ]
+        return base_content
 
     def stop_service(self):
         """
