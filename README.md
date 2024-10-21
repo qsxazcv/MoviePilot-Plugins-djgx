@@ -8,7 +8,7 @@
 ![QQ20241021-134822](https://github.com/user-attachments/assets/90034114-e3f6-49dd-9a5b-2d9fe84d961f)  
 
 
-特殊情况下,比如登录缓存失效了，而又没有及时在企业微信MP应用扫描登录，刚好动态IP又刷新，MP应用就无法获取最新登录二维码  
+特殊情况下，比如登录缓存失效了，而又没有及时在企业微信MP应用扫描登录，刚好动态IP又刷新，MP应用就无法获取最新登录二维码  
 此时可打开MP网页端，打开插件扫描二维码登录即可。  
 ![image](https://github.com/user-attachments/assets/a9638858-fac8-441b-920f-4b8255bedfdc)  
 
