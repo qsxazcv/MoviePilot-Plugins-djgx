@@ -31,7 +31,7 @@ class WeWorkIP(_PluginBase):
     # 插件图标
     plugin_icon = "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true"
     # 插件版本
-    plugin_version = "2.0"
+    plugin_version = "2.1"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -256,6 +256,10 @@ class WeWorkIP(_PluginBase):
         time.sleep(1)
         driver.delete_all_cookies()
         cookies = self.get_cookie()
+        if cookies == '':
+                logger.error('cookie为空,请检查CC配置和插件手动填写项')
+                driver.quit()
+                return
         for cookie in cookies:
             name, value = cookie.split("=")
             driver.add_cookie({"name": name, "value": value})
@@ -705,6 +709,27 @@ class WeWorkIP(_PluginBase):
                                             "type": "info",
                                             "variant": "tonal",
                                             "text": "开启CC和内置登录后,会在插件状态页和企业微信MP应用显示二维码,扫码登录即可正常使用。CC非必须开启，当其他地方登录企业微信时，使用CC获取的Cookie可以避免内置登录顶掉其他地方的登录",
+                                        },
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        "component": "VRow",
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {
+                                    "cols": 12,
+                                },
+                                "content": [
+                                    {
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "info",
+                                            "variant": "tonal",
+                                            "text": "如果在保存配置的时候转圈很久，是因为在等待后台登录任务停止，登录任务最长一分钟，可直接点插件外的区域退出界面，不会影响插件运行",
                                         },
                                     }
                                 ],

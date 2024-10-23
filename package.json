@@ -3,14 +3,15 @@
         "name": "企微自动配置IP",
         "description": "!!docker用户请使用PW版!!定时获取最新动态公网IP，配置到企业微信应用的可信IP列表里。使用selenium运行的版本,适合Windows用户使用",
         "labels": "消息通知",
-        "version": "2.0",
+        "version": "2.0.1",
         "icon": "statistic.png",
         "author": "suraxiuxiu",
         "level": 2,
         "history": {
             "v1.1": "优化cookie获取方式;支持多个应用地址,用,号分隔应用网址。",
             "v1.2": "优化CC同步时机;修正无头模式；尝试适配v2版本",
-            "v2.0": "添加内置扫码登录功能"
+            "v2.0": "添加内置扫码登录功能",
+            "v2.1": "修正内置登录缓存BUG"
         },
         "v2": true
     },
@@ -18,14 +19,15 @@
         "name": "企微自动配置IPpw版",
         "description": "!!docker用户用这个版本!!定时获取最新动态公网IP，配置到企业微信应用的可信IP列表里。使用playWright运行的版本,适合docker用户使用",
         "labels": "消息通知",
-        "version": "2.0",
+        "version": "2.0.1",
         "icon": "statistic.png",
         "author": "suraxiuxiu",
         "level": 2,
         "history": {
             "v1.1": "优化cookie获取方式;支持多个应用地址,用,号分隔应用网址。",
             "v1.2": "优化CC同步时机;修正无头模式；尝试适配v2版本",
-            "v2.0": "添加内置扫码登录功能"
+            "v2.0": "添加内置扫码登录功能",
+            "v2.1": "修正内置登录缓存BUG"
         },
         "v2": true
     }
