@@ -27,7 +27,7 @@ class WeWorkIPPW(_PluginBase):
     # 插件图标
     plugin_icon = "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true"
     # 插件版本
-    plugin_version = "2.1"
+    plugin_version = "2.1.1"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -326,16 +326,22 @@ class WeWorkIPPW(_PluginBase):
                 self.__update_config()   
     
     def parse_cookie_header(self,cookie_header):
-        cookies = []
-        for cookie in cookie_header.split(';'):
-            name, value = cookie.strip().split('=', 1)
-            cookies.append({
-                'name': name,
-                'value': value,
-                'domain': '.work.weixin.qq.com',
-                'path': '/'
-            })
-        return cookies
+        try:
+            cookies = []
+            for cookie in cookie_header.split(';'):
+                name, value = cookie.strip().split('=', 1)
+                cookies.append({
+                    'name': name,
+                    'value': value,
+                    'domain': '.work.weixin.qq.com',
+                    'path': '/'
+                })
+            return cookies
+        except Exception as e:
+            logger.error(f"cookie转换失败,可能格式错误:{e}") 
+            logger.error(f"当前cookie:{cookie_header}") 
+            self._cookie_valid = False
+            return ''
     
     def get_cookie(self):
         cookie_header = ''
@@ -361,6 +367,8 @@ class WeWorkIPPW(_PluginBase):
                 logger.error("未获取到任何cookie")
                 return ''
             cookie = self.parse_cookie_header(cookie_header)
+            if cookie == '':
+                return ''
             self._cookie_from_CC = cookie
             self.__update_config()
             return cookie
