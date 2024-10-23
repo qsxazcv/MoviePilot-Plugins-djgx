@@ -27,7 +27,7 @@ class WeWorkIPPW(_PluginBase):
     # 插件图标
     plugin_icon = "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true"
     # 插件版本
-    plugin_version = "2.1.1"
+    plugin_version = "2.1.2"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -414,13 +414,14 @@ class WeWorkIPPW(_PluginBase):
                         cookies2 = ';'.join([f"{cookie['name']}={cookie['value']}" for cookie in cookies])
                         self._cookie_from_CC = self.parse_cookie_header(cookies2)
                         self._cookie_valid = True
+                        WeChat().send_msg(title = "登录企业微信成功",userid=self._qr_send_users)
                         logger.info("登录企业微信成功")
                         if not self._scheduler.get_job("refresh_cookie"):
                             self.create_refresh_job()
                         if self._scheduler.get_job("wwlogin"):
                             self._scheduler.remove_job("wwlogin")
                     except Exception as e:
-                        logger.error(f"登录超时")
+                        logger.error(f"登录超时:{e}")
                         WeChat().send_msg(title = "二维码失效",text = "请等待扫描下一个二维码,间隔大约一分钟",userid=self._qr_send_users)
                         self._cookie_valid = False
                 except Exception as e:
