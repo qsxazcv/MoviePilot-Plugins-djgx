@@ -31,7 +31,7 @@ class WeWorkIP(_PluginBase):
     # 插件图标
     plugin_icon = "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true"
     # 插件版本
-    plugin_version = "2.1.3"
+    plugin_version = "2.1.4"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -246,6 +246,7 @@ class WeWorkIP(_PluginBase):
         options = webdriver.EdgeOptions()
         options.add_argument("--headless=old")
         driver = webdriver.Edge(options=options)
+        time.sleep(2)#旧版无头模式似乎会出问题,尝试等待解决
         driver.get(self._urls[0])
         time.sleep(1)
         driver.delete_all_cookies()
@@ -309,6 +310,7 @@ class WeWorkIP(_PluginBase):
             options = webdriver.EdgeOptions()
             options.add_argument("--headless=old")
             driver = webdriver.Edge(options=options)
+            time.sleep(2)#旧版无头模式似乎会出问题,尝试等待解决
             driver.get(self._urls[0])
             time.sleep(1)
             driver.delete_all_cookies()
