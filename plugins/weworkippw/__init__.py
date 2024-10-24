@@ -21,13 +21,13 @@ from playwright.sync_api import sync_playwright
 
 class WeWorkIPPW(_PluginBase):
     # 插件名称
-    plugin_name = "企微自动配置IP-Docker版"
+    plugin_name = "企微配置IPpw版"
     # 插件描述
     plugin_desc = "!!docker用户用这个版本!!定时获取最新动态公网IP，配置到企业微信应用的可信IP列表里。"
     # 插件图标
     plugin_icon = "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true"
     # 插件版本
-    plugin_version = "2.1.2"
+    plugin_version = "2.1.3"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -41,14 +41,8 @@ class WeWorkIPPW(_PluginBase):
 
     script_path = os.path.abspath(__file__)
     script_dir = os.path.dirname(script_path)
-    loading_path = "loading.gif"
     qr_path = 'QR.png'
-    loading_path = os.path.join(script_dir, loading_path)
     qr_path = os.path.join(script_dir, qr_path)
-    with open(loading_path, 'rb') as image_file:
-        loading_data = image_file.read()
-        base64_loading = base64.b64encode(loading_data).decode('utf-8')
-    loading_src = f"data:image/gif;base64,{base64_loading}"
     #匹配ip地址的正则
     _ip_pattern = r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
     #获取ip地址的网址列表
@@ -77,7 +71,7 @@ class WeWorkIPPW(_PluginBase):
     _refresh_cron = "*/5 * * * *"
     # 登录循环时间 
     _login_cron = "*/2 * * * *"
-    _cron = None
+    _cron = "*/11 * * * *"
     _enabled = False
     _onlyonce = False
     _built_in_login = True
@@ -633,7 +627,7 @@ class WeWorkIPPW(_PluginBase):
                                         "component": "VTextarea",
                                         "props": {
                                             "model": "cookie_header",
-                                            "label": "COOKIE",
+                                            "label": "非必须填写项:COOKIE",
                                             "rows": 1,
                                             "placeholder": "非必须填写项。手动提取HeaderString格式的Cookie，仅在未使用CC和内置登录的情况下使用。",
                                         },
@@ -653,7 +647,7 @@ class WeWorkIPPW(_PluginBase):
                                         "component": "VTextarea",
                                         "props": {
                                             "model": "wechatUrl",
-                                            "label": "应用网址",
+                                            "label": "必填项:MP应用网址",
                                             "rows": 2,
                                             "placeholder": "企业微信应用的管理网址 多个地址用,分隔 地址类似于https://work.weixin.qq.com/wework_admin/frame#/apps/modApiApp/00000000000",
                                         },
@@ -673,7 +667,7 @@ class WeWorkIPPW(_PluginBase):
                                         "component": "VTextarea",
                                         "props": {
                                             "model": "qr_send_users",
-                                            "label": "指定企业微信成员ID接收登录二维码,不填则发送给所有成员",
+                                            "label": "非必填项:指定企业微信成员ID接收登录二维码,不填则发送给所有成员",
                                             "rows": 2,
                                             "placeholder": "ID查看路径: 企业微信-工作台-管理企业-成员与部门管理-单击成员-账号的值",
                                         },
@@ -697,6 +691,27 @@ class WeWorkIPPW(_PluginBase):
                                             "type": "info",
                                             "variant": "tonal",
                                             "text": "开启CC和内置登录后,会在插件状态页和企业微信MP应用显示二维码,扫码登录即可正常使用。CC非必须开启，当其他地方登录企业微信时，使用CC获取的Cookie可以避免内置登录顶掉其他地方的登录",
+                                        },
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        "component": "VRow",
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {
+                                    "cols": 12,
+                                },
+                                "content": [
+                                    {
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "info",
+                                            "variant": "tonal",
+                                            "text": "如果微信识别登录提示跳转企业微信,跳转后也识别不了,也许是账号风控了,可以转移企业微信给自己小号就能识别扫码登录",
                                         },
                                     }
                                 ],
@@ -925,7 +940,7 @@ class WeWorkIPPW(_PluginBase):
                                 ],
                             }
                         ]
-        img_src = self.loading_src
+        img_src = "https://gitee.com/suraxiuxiu/image/raw/master/loading-M.gif"
         if self._cookie_valid or not self._enabled:
             qr_tip = ""
         elif os.path.exists(self.qr_path):
