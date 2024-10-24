@@ -31,7 +31,7 @@ class WeWorkIP(_PluginBase):
     # 插件图标
     plugin_icon = "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true"
     # 插件版本
-    plugin_version = "2.1.4"
+    plugin_version = "2.1.5"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -347,7 +347,10 @@ class WeWorkIP(_PluginBase):
             self.__update_config()
         except Exception as e:
             logger.error(f"cookie校验失败:{e}")
-            self._cookie_valid = False
+            if "session not created" in str(e):
+                logger.info("浏览器启动失败,跳过本次刷新")
+            else:
+                self._cookie_valid = False
             self.__update_config()
 
     def get_cookie(self):
