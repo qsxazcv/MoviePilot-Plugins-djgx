@@ -3,7 +3,7 @@
         "name": "企微配置IP",
         "description": "!!docker用户请使用PW版!!定时获取最新动态公网IP，配置到企业微信应用的可信IP列表里。使用selenium运行的版本,适合Windows用户使用",
         "labels": "消息通知",
-        "version": "2.1.5",
+        "version": "2.1.6",
         "icon": "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true",
         "author": "suraxiuxiu",
         "level": 2,

@@ -31,7 +31,7 @@ class WeWorkIP(_PluginBase):
     # 插件图标
     plugin_icon = "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true"
     # 插件版本
-    plugin_version = "2.1.5"
+    plugin_version = "2.1.6"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
@@ -312,7 +312,9 @@ class WeWorkIP(_PluginBase):
             driver = webdriver.Edge(options=options)
             time.sleep(2)#旧版无头模式似乎会出问题,尝试等待解决
             driver.get(self._urls[0])
-            time.sleep(1)
+            WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.XPATH, "//iframe[contains(@src, 'login_qrcode')]"))
+                )
             driver.delete_all_cookies()
             cookies = self.get_cookie()
             if cookies == '':
