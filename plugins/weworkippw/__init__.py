@@ -26,7 +26,7 @@ class WeWorkIPPW(_PluginBase):
     # 插件图标
     plugin_icon = "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true"
     # 插件版本
-    plugin_version = "2.1.3"
+    plugin_version = "2.2"
     # 插件作者
     plugin_author = "suraxiuxiu"
     # 作者主页
