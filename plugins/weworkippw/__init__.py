@@ -8,14 +8,13 @@ from datetime import datetime, timedelta
 import pytz
 from typing import Any, List, Dict, Tuple, Optional
 from app.core.event import eventmanager, Event
-from app.schemas.types import EventType
+from app.schemas.types import EventType, MessageChannel, NotificationType
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from app.log import logger
 from app.plugins import _PluginBase
 from app.core.config import settings
 from app.helper.cookiecloud import CookieCloudHelper
-from app.modules.wechat import WeChat
 
 from playwright.sync_api import sync_playwright
 
@@ -285,7 +284,7 @@ class WeWorkIPPW(_PluginBase):
                 browser = p.chromium.launch(headless=True)
                 context = browser.new_context()
                 cookie = self.get_cookie()
-                if cookie == '':
+                if cookie == '' or cookie == ['']:
                     logger.error('cookie为空,请检查CC配置和插件手动填写项')
                     browser.close()
                     self._cookie_valid = False
@@ -394,7 +393,7 @@ class WeWorkIPPW(_PluginBase):
                     qr_img_relative_url = qr_img_element.get_attribute('src')
                     base_url = page.url
                     absolute_url = urljoin(base_url, qr_img_relative_url)
-                    WeChat().send_msg(title = "点击扫描二维码登录企业微信",image=absolute_url,link=absolute_url,userid=self._qr_send_users)
+                    self.post_message(channel=MessageChannel.Wechat,mtype=NotificationType.Plugin,title = "点击扫描二维码登录企业微信",image=absolute_url,link=absolute_url,userid=self._qr_send_users)
                     response = requests.get(absolute_url)
                     if response.status_code == 200:
                         with open(self.qr_path, "wb") as file:
@@ -408,7 +407,7 @@ class WeWorkIPPW(_PluginBase):
                         cookies2 = ';'.join([f"{cookie['name']}={cookie['value']}" for cookie in cookies])
                         self._cookie_from_CC = self.parse_cookie_header(cookies2)
                         self._cookie_valid = True
-                        WeChat().send_msg(title = "登录企业微信成功",userid=self._qr_send_users)
+                        self.post_message(channel=MessageChannel.Wechat,mtype=NotificationType.Plugin,title = "登录企业微信成功",userid=self._qr_send_users)
                         logger.info("登录企业微信成功")
                         if not self._scheduler.get_job("refresh_cookie"):
                             self.create_refresh_job()
@@ -416,7 +415,7 @@ class WeWorkIPPW(_PluginBase):
                             self._scheduler.remove_job("wwlogin")
                     except Exception as e:
                         logger.error(f"登录超时:{e}")
-                        WeChat().send_msg(title = "二维码失效",text = "请等待扫描下一个二维码,间隔大约一分钟",userid=self._qr_send_users)
+                        self.post_message(channel=MessageChannel.Wechat,mtype=NotificationType.Plugin,title = "二维码失效",text = "请等待扫描下一个二维码,间隔大约一分钟",userid=self._qr_send_users)
                         self._cookie_valid = False
                 except Exception as e:
                     logger.error(f"登录失败:{e}")
