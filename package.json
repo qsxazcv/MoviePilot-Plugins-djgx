@@ -1,36 +1,17 @@
 {
-    "WeWorkIP": {
-        "name": "企微配置IP",
-        "description": "!!docker用户请使用PW版!!定时获取最新动态公网IP，配置到企业微信应用的可信IP列表里。使用selenium运行的版本,适合Windows用户使用",
-        "labels": "消息通知",
-        "version": "2.2",
-        "icon": "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true",
-        "author": "suraxiuxiu",
-        "level": 2,
-        "history": {
-            "v2.2": "修正通知方式,适配2.0",
-            "v2.1": "修正内置登录缓存BUG",
-            "v2.0": "添加内置扫码登录功能",
-            "v1.2": "优化CC同步时机;修正无头模式；尝试适配v2版本",
-            "v1.1": "优化cookie获取方式;支持多个应用地址,用,号分隔应用网址。"
-        },
-        "v2": true
-    },
-    "WeWorkIPPW": {
-        "name": "企微配置IPpw版",
-        "description": "!!docker用户用这个版本!!定时获取最新动态公网IP，配置到企业微信应用的可信IP列表里。使用playWright运行的版本,适合docker用户使用",
-        "labels": "消息通知",
-        "version": "2.2",
-        "icon": "https://github.com/suraxiuxiu/MoviePilot-Plugins/blob/main/icons/micon.png?raw=true",
-        "author": "suraxiuxiu",
-        "level": 2,
-        "history": {
-            "v2.2": "修正通知方式,适配2.0",
-            "v2.1": "修正内置登录缓存BUG",
-            "v2.0": "添加内置扫码登录功能",
-            "v1.2": "优化CC同步时机;修正无头模式；尝试适配v2版本",
-            "v1.1": "优化cookie获取方式;支持多个应用地址,用,号分隔应用网址。"
-        },
-        "v2": true
+  "ShortPlayMonitor": {
+    "name": "短剧刮削",
+    "description": "监控视频短剧创建，刮削。",
+    "labels": "刮削",
+    "version": "3.2",
+    "icon": "Amule_B.png",
+    "author": "thsrite",
+    "level": 1,
+    "v2": true,
+    "history": {
+      "v3.2": "支持消息发送",
+      "v3.1": "支持自定义转移方式",
+      "v3.0": "默认从tmdb刮削，刮削失败则从pt站刮削"
     }
+  }
 }
